@@ -15,8 +15,13 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 script {
+                    // Create virtual environment
                     sh 'python3 -m venv venv'
+                    // Upgrade pip and install dependencies
+                    sh './venv/bin/pip install --upgrade pip'
                     sh './venv/bin/pip install -r requirements.txt'
+                    // Install Bandit explicitly if not in requirements
+                    sh './venv/bin/pip install bandit'
                 }
             }
         }
@@ -32,7 +37,8 @@ pipeline {
         stage('Static Code Analysis (Bandit)') {
             steps {
                 script {
-                    sh './venv/bin/bandit -r .'
+                    // Run Bandit via Python module to avoid missing executable issues
+                    sh './venv/bin/python -m bandit -r .'
                 }
             }
         }
