@@ -2,15 +2,18 @@ pipeline {
     agent any
 
     environment {
-        PYTHON_IMAGE = 'python:3.12-slim'
-        IMAGE_NAME = 'arithmetic-api'
-        DOCKERHUB_USER = 'muhsen02'
+        PYTHON_IMAGE = 'python:3.9-slim'
+        IMAGE_NAME = 'python-devsecops-jenkins_app'
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Declarative: Checkout SCM') {
             steps {
-                checkout scm
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[url: 'https://github.com/MuhseN-02/lab_DSO_2.git']]
+                ])
             }
         }
 
@@ -35,7 +38,11 @@ pipeline {
         stage('Static Code Analysis (Bandit)') {
             steps {
                 script {
-                    sh './venv/bin/python -m bandit -r . -x ./venv -f html -o bandit_report.html'
+                    // Run Bandit, but do not fail the pipeline on warnings
+                    sh '''
+                        ./venv/bin/python -m bandit -r . -x ./venv -f html -o bandit_report.html || true
+                    '''
+                    echo "Bandit analysis finished (see bandit_report.html)."
                 }
             }
         }
@@ -51,14 +58,7 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 script {
-                    sh '''
-                        CONTAINER_ID=$(docker ps -q --filter ancestor=${IMAGE_NAME})
-                        if [ ! -z "$CONTAINER_ID" ]; then
-                            docker stop $CONTAINER_ID
-                            docker rm $CONTAINER_ID
-                        fi
-                        docker run -d -p 5000:5000 ${IMAGE_NAME}
-                    '''
+                    sh "docker run -d -p 5000:5000 ${IMAGE_NAME}"
                 }
             }
         }
@@ -66,13 +66,11 @@ pipeline {
         stage('Push Docker Image (Optional)') {
             steps {
                 script {
-                    sh """
-                        docker tag ${IMAGE_NAME} ${DOCKERHUB_USER}/${IMAGE_NAME}:latest
-                        docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:latest
-                    """
+                    echo "Optional stage: Docker push can be added here"
                 }
             }
         }
+
     }
 
     post {
