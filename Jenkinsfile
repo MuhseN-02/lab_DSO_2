@@ -27,7 +27,7 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    sh 'source ./venv/bin/activate && pytest -v --maxfail=1 --disable-warnings'
+                    sh './venv/bin/pytest -v --maxfail=1 --disable-warnings'
                 }
             }
         }
@@ -35,7 +35,7 @@ pipeline {
         stage('Static Code Analysis (Bandit)') {
             steps {
                 script {
-                    sh 'source ./venv/bin/activate && python -m bandit -r . -x ./venv -f html -o bandit_report.html'
+                    sh './venv/bin/python -m bandit -r . -x ./venv -f html -o bandit_report.html'
                 }
             }
         }
