@@ -2,86 +2,92 @@ pipeline {
     agent any
 
     environment {
-        PYTHON_IMAGE = 'python:3.9-slim'
-        IMAGE_NAME = 'python-devsecops-jenkins_app'
+        APP_NAME = 'lab2-python-app'
+        DOCKER_IMAGE = 'python:3.9-slim'
+        VENV_PATH = 'venv'
     }
 
     stages {
 
-        stage('Checkout SCM') {
+        stage('Checkout Repository') {
             steps {
-                checkout([$class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[url: 'https://github.com/MuhseN-02/lab_DSO_2.git']]
-                ])
+                echo '📦 Checking out code from GitHub...'
+                checkout scm
             }
         }
 
-        stage('Setup Python') {
+        stage('Set Up Environment') {
             steps {
-                script {
-                    sh 'python3 -m venv venv'
-                    sh './venv/bin/pip install --upgrade pip'
-                    sh './venv/bin/pip install -r requirements.txt'
-                }
+                echo '⚙️ Setting up Python virtual environment...'
+                sh '''
+                    python3 -m venv ${VENV_PATH}
+                    . ${VENV_PATH}/bin/activate
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
+                '''
             }
         }
 
-        stage('Run Tests') {
+        stage('Run Unit Tests') {
             steps {
-                script {
-                    sh './venv/bin/pytest -v --maxfail=1 --disable-warnings'
-                }
+                echo '🧪 Running tests...'
+                sh '''
+                    . ${VENV_PATH}/bin/activate
+                    pytest --maxfail=1 --disable-warnings -q
+                '''
             }
         }
 
-        stage('Static Code Analysis (Bandit)') {
+        stage('Static Analysis (Bandit)') {
             steps {
-                script {
-                    sh '''
-                        ./venv/bin/python -m bandit -r . -x ./venv -f html -o bandit_report.html || true
-                    '''
-                    echo "Bandit analysis finished (see bandit_report.html)."
-                }
+                echo '🔍 Running Bandit security scan...'
+                sh '''
+                    . ${VENV_PATH}/bin/activate
+                    bandit -r . -x ${VENV_PATH} -f html -o bandit_report.html || true
+                '''
+                echo 'Bandit scan completed (report saved as bandit_report.html)'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    // Use sudo to avoid permission issues
-                    sh "sudo docker build -t ${IMAGE_NAME} ."
-                }
+                echo '🐳 Building Docker image...'
+                sh '''
+                    if ! command -v docker &> /dev/null
+                    then
+                        echo "⚠️ Docker not found on this agent. Skipping build."
+                    else
+                        sudo docker build -t ${APP_NAME}:latest .
+                    fi
+                '''
             }
         }
 
-        stage('Deploy Application') {
+        stage('Deploy Container') {
             steps {
-                script {
-                    sh "sudo docker run -d -p 5000:5000 ${IMAGE_NAME}"
-                }
-            }
-        }
-
-        stage('Push Docker Image (Optional)') {
-            steps {
-                script {
-                    echo "Optional stage: Docker push can be added here"
-                }
+                echo '🚀 Deploying container...'
+                sh '''
+                    if command -v docker &> /dev/null
+                    then
+                        sudo docker run -d -p 5000:5000 --name ${APP_NAME} ${APP_NAME}:latest || true
+                    else
+                        echo "⚠️ Docker not available, skipping deployment."
+                    fi
+                '''
             }
         }
     }
 
     post {
-        always {
-            echo 'Cleaning workspace...'
-            cleanWs()
-        }
         success {
-            echo '✅ Lab2 DevSecOps pipeline completed successfully!'
+            echo '✅ Pipeline completed successfully!'
         }
         failure {
-            echo '❌ Lab2 DevSecOps pipeline failed!'
+            echo '❌ Pipeline failed. Check the logs above.'
+        }
+        always {
+            echo '🧹 Cleaning workspace...'
+            cleanWs()
         }
     }
 }
