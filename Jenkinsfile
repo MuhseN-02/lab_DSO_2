@@ -1,8 +1,10 @@
 pipeline {
     agent any
+
     environment {
-        PYTHON_IMAGE = 'python:3.9-slim'
-        IMAGE_NAME = 'lab2-devsecops-app'
+        PYTHON_IMAGE = 'python:3.12-slim'
+        IMAGE_NAME = 'arithmetic-api'
+        DOCKERHUB_USER = 'muhsen02'
     }
 
     stages {
@@ -12,14 +14,12 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Setup Python') {
             steps {
                 script {
                     sh 'python3 -m venv venv'
                     sh './venv/bin/pip install --upgrade pip'
                     sh './venv/bin/pip install -r requirements.txt'
-                    // Ensure Bandit and its dependencies are installed
-                    sh './venv/bin/pip install bandit pbr'
                 }
             }
         }
@@ -27,7 +27,7 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    sh './venv/bin/pytest'
+                    sh 'source ./venv/bin/activate && pytest -v --maxfail=1 --disable-warnings'
                 }
             }
         }
@@ -35,7 +35,7 @@ pipeline {
         stage('Static Code Analysis (Bandit)') {
             steps {
                 script {
-                    sh './venv/bin/python -m bandit -r .'
+                    sh 'source ./venv/bin/activate && python -m bandit -r . -x ./venv -f html -o bandit_report.html'
                 }
             }
         }
@@ -43,7 +43,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'docker-compose build'
+                    sh "docker build -t ${IMAGE_NAME} ."
                 }
             }
         }
@@ -51,7 +51,25 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 script {
-                    sh 'docker-compose up -d'
+                    sh '''
+                        CONTAINER_ID=$(docker ps -q --filter ancestor=${IMAGE_NAME})
+                        if [ ! -z "$CONTAINER_ID" ]; then
+                            docker stop $CONTAINER_ID
+                            docker rm $CONTAINER_ID
+                        fi
+                        docker run -d -p 5000:5000 ${IMAGE_NAME}
+                    '''
+                }
+            }
+        }
+
+        stage('Push Docker Image (Optional)') {
+            steps {
+                script {
+                    sh """
+                        docker tag ${IMAGE_NAME} ${DOCKERHUB_USER}/${IMAGE_NAME}:latest
+                        docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:latest
+                    """
                 }
             }
         }
@@ -63,10 +81,10 @@ pipeline {
             cleanWs()
         }
         success {
-            echo '✅ Lab2 build completed successfully!'
+            echo '✅ Lab2 DevSecOps pipeline completed successfully!'
         }
         failure {
-            echo '❌ Lab2 build failed!'
+            echo '❌ Lab2 DevSecOps pipeline failed!'
         }
     }
 }
