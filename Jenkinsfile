@@ -8,7 +8,7 @@ pipeline {
 
     stages {
 
-        stage('Declarative: Checkout SCM') {
+        stage('Checkout SCM') {
             steps {
                 checkout([$class: 'GitSCM',
                     branches: [[name: '*/main']],
@@ -38,7 +38,6 @@ pipeline {
         stage('Static Code Analysis (Bandit)') {
             steps {
                 script {
-                    // Run Bandit, but do not fail the pipeline on warnings
                     sh '''
                         ./venv/bin/python -m bandit -r . -x ./venv -f html -o bandit_report.html || true
                     '''
@@ -50,7 +49,8 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${IMAGE_NAME} ."
+                    // Use sudo to avoid permission issues
+                    sh "sudo docker build -t ${IMAGE_NAME} ."
                 }
             }
         }
@@ -58,7 +58,7 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 script {
-                    sh "docker run -d -p 5000:5000 ${IMAGE_NAME}"
+                    sh "sudo docker run -d -p 5000:5000 ${IMAGE_NAME}"
                 }
             }
         }
@@ -70,7 +70,6 @@ pipeline {
                 }
             }
         }
-
     }
 
     post {
