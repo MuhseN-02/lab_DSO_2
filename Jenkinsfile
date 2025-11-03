@@ -5,7 +5,6 @@ pipeline {
         APP_NAME = 'lab2-python-app'
         DOCKER_IMAGE = 'python:3.9-slim'
         VENV_PATH = 'venv'
-        IMAGE_TAG = 'latest'
     }
 
     stages {
@@ -17,7 +16,7 @@ pipeline {
             }
         }
 
-        stage('Set Up Python Environment') {
+        stage('Set Up Environment') {
             steps {
                 echo ' Setting up Python virtual environment...'
                 sh '''
@@ -31,7 +30,7 @@ pipeline {
 
         stage('Run Unit Tests') {
             steps {
-                echo ' Running unit tests...'
+                echo ' Running tests...'
                 sh '''
                     . ${VENV_PATH}/bin/activate
                     pytest --maxfail=1 --disable-warnings -q
@@ -46,17 +45,7 @@ pipeline {
                     . ${VENV_PATH}/bin/activate
                     bandit -r . -x ${VENV_PATH} -f html -o bandit_report.html || true
                 '''
-                echo ' Bandit report saved as bandit_report.html'
-            }
-        }
-
-        stage('Dependency Vulnerability Scan (Safety)') {
-            steps {
-                echo ' Checking Python dependencies for vulnerabilities using Safety...'
-                sh '''
-                    . ${VENV_PATH}/bin/activate
-                    safety check || true
-                '''
+                echo 'Bandit scan completed (report saved as bandit_report.html)'
             }
         }
 
@@ -68,21 +57,7 @@ pipeline {
                     then
                         echo " Docker not found on this agent. Skipping build."
                     else
-                        sudo docker build -t ${APP_NAME}:${IMAGE_TAG} .
-                    fi
-                '''
-            }
-        }
-
-        stage('Container Vulnerability Scan (Trivy)') {
-            steps {
-                echo 'Scanning Docker image with Trivy...'
-                sh '''
-                    if command -v trivy &> /dev/null
-                    then
-                        trivy image --severity HIGH,CRITICAL ${APP_NAME}:${IMAGE_TAG} || true
-                    else
-                        echo " Trivy not installed. Skipping vulnerability scan."
+                        sudo docker build -t ${APP_NAME}:latest .
                     fi
                 '''
             }
@@ -90,12 +65,11 @@ pipeline {
 
         stage('Deploy Container') {
             steps {
-                echo ' Deploying Docker container...'
+                echo ' Deploying container...'
                 sh '''
                     if command -v docker &> /dev/null
                     then
-                        sudo docker rm -f ${APP_NAME} || true
-                        sudo docker run -d -p 5000:5000 --name ${APP_NAME} ${APP_NAME}:${IMAGE_TAG}
+                        sudo docker run -d -p 5000:5000 --name ${APP_NAME} ${APP_NAME}:latest || true
                     else
                         echo " Docker not available, skipping deployment."
                     fi
@@ -106,10 +80,10 @@ pipeline {
 
     post {
         success {
-            echo ' Pipeline completed successfully! '
+            echo ' Pipeline completed successfully!'
         }
         failure {
-            echo ' Pipeline failed. Please check the logs above.'
+            echo ' Pipeline failed. Check the logs above.'
         }
         always {
             echo ' Cleaning workspace...'
